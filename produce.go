@@ -1,0 +1,54 @@
+package main
+
+import (
+	"fmt"
+	"kafka-go-benchmark/sarama"
+	"kafka-go-benchmark/segmentio"
+	"strconv"
+	"time"
+)
+
+type Producer interface {
+	SendAsync(msg []byte, key string, topic string) error
+	SendSync(msg []byte, key string, topic string) error
+	Close()
+}
+
+func initSaramaProducer(addr []string) Producer {
+	ret, err := sarama.NewProducer(addr)
+	if err != nil {
+		panic(fmt.Sprintf("sarama: %s", err.Error()))
+	}
+
+	return ret
+}
+
+func initSegmentioProducer(addr []string) Producer {
+	ret, err := segmentio.NewProducer(addr)
+	if err != nil {
+		panic(fmt.Sprintf("segmentio: %s", err.Error()))
+	}
+
+	return ret
+}
+
+func produce() {
+	producers := map[string]func([]string) Producer{
+		"sarama":    initSaramaProducer,
+		"segmentio": initSegmentioProducer,
+	}
+
+	PrintMemUsage("before test")
+	p := producers[driver]([]string{brokers})
+	start := time.Now()
+	for i := 0; i < records; i++ {
+		s := strconv.Itoa(i)
+		err := p.SendAsync([]byte(s), s, topic)
+		if err != nil {
+			panic(fmt.Sprintf("writer: %s", err))
+		}
+	}
+	p.Close()
+	PrintMemUsage(driver)
+	fmt.Printf("%s finished: %s\n", driver, time.Since(start))
+}
